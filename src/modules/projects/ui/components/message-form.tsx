@@ -87,6 +87,7 @@ export const MessageForm = ({ projectId }: Props) => {
             <TextareaAutosize
               {...field}
               disabled={isPending}
+              aria-label="Describe the change you want to make"
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               minRows={2}

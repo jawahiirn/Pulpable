@@ -12,7 +12,7 @@ const Page = () => {
             height={50}
             alt={'Pulpable'}
             src={'/logo.svg'}
-            className={'hiden md:block'}
+            className={'hidden md:block'}
           />
         </div>
         <h1 className="text-2xl md:text-5xl font-bold text-center">

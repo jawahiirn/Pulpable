@@ -6,7 +6,6 @@ import { z } from 'zod';
 import TextareaAutosize from 'react-textarea-autosize';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpIcon, Loader2Icon } from 'lucide-react';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Form, FormField } from '@/components/ui/form';
@@ -47,7 +46,7 @@ export const ProjectForm = () => {
       },
       onError: (err) => {
         if (err.data?.code === 'TOO_MANY_REQUESTS') router.push('/pricing');
-        if (err.data?.code === 'UNAUTHORIZED') {
+        else if (err.data?.code === 'UNAUTHORIZED') {
           clerk.openSignIn();
         } else {
           router.push('/sign-in');
@@ -88,6 +87,7 @@ export const ProjectForm = () => {
               <TextareaAutosize
                 {...field}
                 disabled={isPending}
+                aria-label="Describe the app you want to build"
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 minRows={2}

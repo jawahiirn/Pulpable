@@ -22,7 +22,9 @@ export function FragmentWeb({ data }: Props) {
   };
 
   const onCopy = () => {
+    if (!data.sandboxUrl) return;
     navigator.clipboard.writeText(data.sandboxUrl);
+    setCopied(true);
     setTimeout(() => {
       setCopied(false);
     }, 2000);
@@ -60,7 +62,7 @@ export function FragmentWeb({ data }: Props) {
       </div>
       <iframe
         key={fragmentKey}
-        className={'h-full w-ful'}
+        className={'h-full w-full'}
         sandbox={'allow-forms allow-scripts allow-same-origin'}
         loading={'lazy'}
         src={data.sandboxUrl}

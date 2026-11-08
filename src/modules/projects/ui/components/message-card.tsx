@@ -116,7 +116,7 @@ const FragmentCard = ({
   return (
     <button
       className={cn(
-        'flex items-start textstart gap-2 border rounded-lg bg-muted w-fit p-3 hover:bg-secondary transition-colors',
+        'flex items-start text-start gap-2 border rounded-lg bg-muted w-fit p-3 hover:bg-secondary transition-colors',
         isActiveFragment &&
           'bg-primary text-primary-foreground border-primary hover:bg-primary'
       )}
