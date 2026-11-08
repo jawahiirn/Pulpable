@@ -5,6 +5,7 @@ import { inngest } from '@/inngest/client';
 import { prisma } from '@/lib/db';
 import { TRPCError } from '@trpc/server';
 import { consumeCredits } from '@/lib/usage';
+import { ProjectStatus } from '@/generated/prisma';
 
 export const messagesRouter = createTRPCRouter({
   //  Create MESSAGE
@@ -30,6 +31,16 @@ export const messagesRouter = createTRPCRouter({
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Project not found',
+        });
+      }
+
+      if (
+        existingProject.status === ProjectStatus.QUEUED ||
+        existingProject.status === ProjectStatus.RUNNING
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Please wait for the current generation to finish.',
         });
       }
 
@@ -59,14 +70,41 @@ export const messagesRouter = createTRPCRouter({
           type: MessageType.RESULT,
         },
       });
-      //   Invoke the background job by Inngest
-      await inngest.send({
-        name: 'code-agent/run',
+      await prisma.project.update({
+        where: { id: existingProject.id },
         data: {
-          value: input.value,
-          projectId: input.projectId,
+          status: ProjectStatus.QUEUED,
+          generationStep: 'Queued',
+          generationProgress: 0,
+          generationError: null,
+          generationStartedAt: null,
+          generationCompletedAt: null,
         },
       });
+      try {
+        await inngest.send({
+          name: 'code-agent/run',
+          data: {
+            value: input.value,
+            projectId: input.projectId,
+          },
+        });
+      } catch {
+        await prisma.project.update({
+          where: { id: existingProject.id },
+          data: {
+            status: ProjectStatus.FAILED,
+            generationStep: 'Could not start generation',
+            generationError: 'The generation job could not be queued.',
+            generationCompletedAt: new Date(),
+          },
+        });
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Could not start generation. Please try again.',
+        });
+      }
       return createdMessage;
     }),
   // GET MESSAGES

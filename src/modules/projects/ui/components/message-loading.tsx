@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 
-const ShimmerMessages = () => {
+const ShimmerMessages = ({ step }: { step?: string | null }) => {
   const messages = [
     'Thinking...',
     'Loading...',
@@ -25,12 +25,12 @@ const ShimmerMessages = () => {
   return (
     <div className={'flex items-center gap-2'}>
       <span className={'text-base text-muted-foreground animate-pulse'}>
-        {messages[currentMessageIndex]}
+        {step || messages[currentMessageIndex]}
       </span>
     </div>
   );
 };
-export const MessageLoading = () => {
+export const MessageLoading = ({ step }: { step?: string | null }) => {
   return (
     <div className={'flex flex-col group px-2 pb-4'}>
       <div className="flex itmes-center gap-2 pl-2 mb-2">
@@ -41,10 +41,10 @@ export const MessageLoading = () => {
           height={18}
           className={'shrink-0'}
         />
-        <span className="text-sm font-kmedium">Pulpable</span>
+        <span className="text-sm font-medium">Pulpable</span>
       </div>
       <div className="pl-8.5 flex flex-col gap-y-4">
-        <ShimmerMessages />
+        <ShimmerMessages step={step} />
       </div>
     </div>
   );

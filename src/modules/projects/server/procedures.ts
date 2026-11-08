@@ -5,6 +5,34 @@ import { prisma } from '@/lib/db';
 import { generateSlug } from 'random-word-slugs';
 import { TRPCError } from '@trpc/server';
 import { consumeCredits } from '@/lib/usage';
+import { ProjectStatus } from '@/generated/prisma';
+
+async function queueGeneration(projectId: string, value: string) {
+  try {
+    await inngest.send({
+      name: 'code-agent/run',
+      data: {
+        value,
+        projectId,
+      },
+    });
+  } catch {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        status: ProjectStatus.FAILED,
+        generationStep: 'Could not start generation',
+        generationError: 'The generation job could not be queued.',
+        generationCompletedAt: new Date(),
+      },
+    });
+
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Could not start generation. Please try again.',
+    });
+  }
+}
 
 export const projectsRouter = createTRPCRouter({
   //  CREATE PROJECT
@@ -41,6 +69,8 @@ export const projectsRouter = createTRPCRouter({
           name: generateSlug(2, {
             format: 'kebab',
           }),
+          status: ProjectStatus.QUEUED,
+          generationStep: 'Queued',
           messages: {
             create: {
               content: input.value,
@@ -50,14 +80,7 @@ export const projectsRouter = createTRPCRouter({
           },
         },
       });
-      //   Invoke the background job by Inngest
-      await inngest.send({
-        name: 'code-agent/run',
-        data: {
-          value: input.value,
-          projectId: createdProject.id,
-        },
-      });
+      await queueGeneration(createdProject.id, input.value);
 
       return createdProject;
     }),
@@ -82,6 +105,69 @@ export const projectsRouter = createTRPCRouter({
         });
       }
       return project;
+    }),
+  retry: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: input.id,
+          userId: ctx.auth.userId,
+        },
+      });
+
+      if (!project) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Project not found',
+        });
+      }
+
+      if (
+        project.status === ProjectStatus.QUEUED ||
+        project.status === ProjectStatus.RUNNING
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This project is already being generated.',
+        });
+      }
+
+      const lastUserMessage = await prisma.message.findFirst({
+        where: {
+          projectId: project.id,
+          role: 'USER',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (!lastUserMessage) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'There is no prompt to retry.',
+        });
+      }
+
+      const queuedProject = await prisma.project.update({
+        where: { id: project.id },
+        data: {
+          status: ProjectStatus.QUEUED,
+          generationStep: 'Queued',
+          generationProgress: 0,
+          generationError: null,
+          generationStartedAt: null,
+          generationCompletedAt: null,
+        },
+      });
+
+      await queueGeneration(project.id, lastUserMessage.content);
+      return queuedProject;
     }),
   // GET PROJECTS
   getMany: protectedProcedure.query(async ({ ctx }) => {

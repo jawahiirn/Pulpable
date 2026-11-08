@@ -24,6 +24,14 @@ enum MessageType {
   ERROR
 }
 
+enum ProjectStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 model Message {
   id        String      @id @default(uuid())
   content   String
@@ -50,6 +58,13 @@ model Fragment {
 model Project {
   id        String    @id @default(uuid())
   name      String
+  status    ProjectStatus @default(QUEUED)
+  generationStep String?
+  generationProgress Int @default(0)
+  generationError String?
+  generationAttempt Int @default(0)
+  generationStartedAt DateTime?
+  generationCompletedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
