@@ -6,6 +6,12 @@ import { prisma } from '@/lib/db';
 import { TRPCError } from '@trpc/server';
 import { consumeCredits } from '@/lib/usage';
 import { ProjectStatus } from '@/generated/prisma';
+import { getGenerationEnv } from '@/lib/env';
+import {
+  classifyGenerationError,
+  getSafeGenerationError,
+  logGenerationError,
+} from '@/lib/generation-errors';
 
 export const messagesRouter = createTRPCRouter({
   //  Create MESSAGE
@@ -45,6 +51,16 @@ export const messagesRouter = createTRPCRouter({
       }
 
       try {
+        getGenerationEnv();
+      } catch (error) {
+        logGenerationError(existingProject.id, error, 'CONFIGURATION_ERROR');
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: getSafeGenerationError('CONFIGURATION_ERROR'),
+        });
+      }
+
+      try {
         await consumeCredits();
       } catch (error) {
         if (error instanceof Error) {
@@ -77,6 +93,7 @@ export const messagesRouter = createTRPCRouter({
           generationStep: 'Queued',
           generationProgress: 0,
           generationError: null,
+          generationErrorCode: null,
           generationStartedAt: null,
           generationCompletedAt: null,
         },
@@ -89,13 +106,16 @@ export const messagesRouter = createTRPCRouter({
             projectId: input.projectId,
           },
         });
-      } catch {
+      } catch (error) {
+        const errorCode = classifyGenerationError(error);
+        logGenerationError(existingProject.id, error, errorCode);
         await prisma.project.update({
           where: { id: existingProject.id },
           data: {
             status: ProjectStatus.FAILED,
             generationStep: 'Could not start generation',
-            generationError: 'The generation job could not be queued.',
+            generationError: getSafeGenerationError(errorCode),
+            generationErrorCode: errorCode,
             generationCompletedAt: new Date(),
           },
         });

@@ -13,6 +13,7 @@ import { useTRPC } from '@/trpc/client';
 import { useRouter } from 'next/navigation';
 import { PROJECT_TEMPLATES } from '@/modules/home/constants';
 import { useClerk } from '@clerk/nextjs';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
   value: z
@@ -49,7 +50,7 @@ export const ProjectForm = () => {
         else if (err.data?.code === 'UNAUTHORIZED') {
           clerk.openSignIn();
         } else {
-          router.push('/sign-in');
+          toast.error(err.message);
         }
       },
     })

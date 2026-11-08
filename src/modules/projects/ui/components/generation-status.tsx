@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useTRPC } from '@/trpc/client';
+import { toast } from 'sonner';
 
 interface Props {
   project: Pick<
@@ -49,6 +50,7 @@ export const GenerationStatus = ({ project }: Props) => {
           trpc.messages.getMany.queryOptions({ projectId: project.id })
         );
       },
+      onError: (error) => toast.error(error.message),
     })
   );
 
@@ -86,6 +88,11 @@ export const GenerationStatus = ({ project }: Props) => {
           <RotateCcwIcon className={retry.isPending ? 'animate-spin' : ''} />
           Retry
         </Button>
+        {project.generationError && (
+          <span className="text-xs text-destructive" role="alert">
+            {project.generationError}
+          </span>
+        )}
       </div>
     );
   }
