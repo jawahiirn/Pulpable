@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .js,.ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"No automated tests yet\"",
     "lint:fix": "eslint . --ext .js,.ts,.tsx --fix ",
     "postinstall": "prisma generate"
   },

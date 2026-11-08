@@ -4,7 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 
 const FREE_POINTS = 5;
 const SUBSCRIPTION_POINTS = 100;
-const DURATION = 30 * 14 * 60 * 60; // 30 DAYS
+const DURATION = 30 * 24 * 60 * 60; // 30 days
 const GENERATION_COST = 1;
 
 export async function getUsageTracker() {

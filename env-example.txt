@@ -1,4 +1,6 @@
-DATABASE_URL= DATABASE_URL
-NEXT_PUBLIC_APP_URL='http://localhost:3000'
-OPENAPI_API_KEY=OPEN_AI_API_KEY
-E2B_API_KEY=YOUR_E2B_API_KEY
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+OPENAI_API_KEY=your_openai_api_key
+E2B_API_KEY=your_e2b_api_key
+INNGEST_EVENT_KEY=your_inngest_event_key
+INNGEST_SIGNING_KEY=your_inngest_signing_key
