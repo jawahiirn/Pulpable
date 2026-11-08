@@ -6,9 +6,16 @@ import { generateSlug } from 'random-word-slugs';
 import { TRPCError } from '@trpc/server';
 import { consumeCredits } from '@/lib/usage';
 import { ProjectStatus } from '@/generated/prisma';
+import { getGenerationEnv } from '@/lib/env';
+import {
+  classifyGenerationError,
+  getSafeGenerationError,
+  logGenerationError,
+} from '@/lib/generation-errors';
 
 async function queueGeneration(projectId: string, value: string) {
   try {
+    getGenerationEnv();
     await inngest.send({
       name: 'code-agent/run',
       data: {
@@ -16,13 +23,16 @@ async function queueGeneration(projectId: string, value: string) {
         projectId,
       },
     });
-  } catch {
+  } catch (error) {
+    const errorCode = classifyGenerationError(error);
+    logGenerationError(projectId, error, errorCode);
     await prisma.project.update({
       where: { id: projectId },
       data: {
         status: ProjectStatus.FAILED,
         generationStep: 'Could not start generation',
-        generationError: 'The generation job could not be queued.',
+        generationError: getSafeGenerationError(errorCode),
+        generationErrorCode: errorCode,
         generationCompletedAt: new Date(),
       },
     });
@@ -46,6 +56,16 @@ export const projectsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      try {
+        getGenerationEnv();
+      } catch (error) {
+        logGenerationError('preflight', error, 'CONFIGURATION_ERROR');
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: getSafeGenerationError('CONFIGURATION_ERROR'),
+        });
+      }
+
       try {
         await consumeCredits();
       } catch (error) {
@@ -161,6 +181,7 @@ export const projectsRouter = createTRPCRouter({
           generationStep: 'Queued',
           generationProgress: 0,
           generationError: null,
+          generationErrorCode: null,
           generationStartedAt: null,
           generationCompletedAt: null,
         },

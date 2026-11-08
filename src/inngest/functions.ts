@@ -19,6 +19,12 @@ import { prisma } from '@/lib/db';
 import { ProjectStatus } from '@/generated/prisma';
 import { PROMPT, FRAGMENT_TITLE_PROMPT, RESPONSE_PROMPT } from '@/prompt';
 import { SANDBOX_TIMEOUT } from '@/inngest/types';
+import { getGenerationEnv } from '@/lib/env';
+import {
+  classifyGenerationError,
+  getSafeGenerationError,
+  logGenerationError,
+} from '@/lib/generation-errors';
 
 const COMMAND_TIMEOUT = 90_000;
 const MAX_COMMAND_OUTPUT = 20_000;
@@ -33,6 +39,8 @@ export const codeAgentFunction = inngest.createFunction(
   { event: 'code-agent/run' },
   async ({ event, step }) => {
     try {
+      const generationEnv = getGenerationEnv();
+
       await step.run('mark-project-running', async () => {
         await prisma.project.update({
           where: { id: event.data.projectId },
@@ -41,6 +49,7 @@ export const codeAgentFunction = inngest.createFunction(
             generationStep: 'Preparing sandbox',
             generationProgress: 5,
             generationError: null,
+            generationErrorCode: null,
             generationStartedAt: new Date(),
             generationCompletedAt: null,
             generationAttempt: { increment: 1 },
@@ -104,7 +113,7 @@ export const codeAgentFunction = inngest.createFunction(
         description: 'An expert coding agent',
         system: PROMPT,
         model: openai({
-          model: 'gpt-6.1-sol',
+          model: generationEnv.OPENAI_CODE_MODEL,
         }),
         tools: [
           createTool({
@@ -266,7 +275,7 @@ export const codeAgentFunction = inngest.createFunction(
         description: 'A fragment title generator',
         system: FRAGMENT_TITLE_PROMPT,
         model: openai({
-          model: 'gpt-6-luna',
+          model: generationEnv.OPENAI_SUMMARY_MODEL,
         }),
       });
 
@@ -312,6 +321,7 @@ export const codeAgentFunction = inngest.createFunction(
               status: ProjectStatus.FAILED,
               generationStep: 'Generation failed',
               generationError: 'The agent did not produce a usable app.',
+              generationErrorCode: 'INVALID_AGENT_OUTPUT',
               generationProgress: 0,
               generationCompletedAt: new Date(),
             },
@@ -340,6 +350,7 @@ export const codeAgentFunction = inngest.createFunction(
             generationStep: 'Ready',
             generationProgress: 100,
             generationError: null,
+            generationErrorCode: null,
             generationCompletedAt: new Date(),
           },
         });
@@ -353,16 +364,16 @@ export const codeAgentFunction = inngest.createFunction(
         summary: result.state.data.summary,
       };
     } catch (error) {
+      const errorCode = classifyGenerationError(error);
+      logGenerationError(event.data.projectId, error, errorCode);
       await step.run('mark-project-failed', async () => {
         await prisma.project.update({
           where: { id: event.data.projectId },
           data: {
             status: ProjectStatus.FAILED,
             generationStep: 'Generation failed',
-            generationError:
-              error instanceof Error
-                ? error.message.slice(0, 1000)
-                : 'The generation failed unexpectedly.',
+            generationError: getSafeGenerationError(errorCode),
+            generationErrorCode: errorCode,
             generationProgress: 0,
             generationCompletedAt: new Date(),
           },

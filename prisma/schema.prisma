@@ -62,6 +62,7 @@ model Project {
   generationStep String?
   generationProgress Int @default(0)
   generationError String?
+  generationErrorCode String?
   generationAttempt Int @default(0)
   generationStartedAt DateTime?
   generationCompletedAt DateTime?
