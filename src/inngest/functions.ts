@@ -14,6 +14,7 @@ import {
   parseOutput,
 } from '@/inngest/utils';
 import { z } from 'zod';
+import { getAsyncCtx } from 'inngest/experimental';
 import { prisma } from '@/lib/db';
 import { ProjectStatus } from '@/generated/prisma';
 import { PROMPT, FRAGMENT_TITLE_PROMPT, RESPONSE_PROMPT } from '@/prompt';
@@ -42,6 +43,33 @@ type AgentToolOptions = {
       data: AgentState;
     };
   };
+};
+
+const runWithAgentKitContext = async <T>(handler: () => Promise<T>) => {
+  const currentContext = (await getAsyncCtx()) as
+    | (Record<string, unknown> & {
+        execution?: { ctx?: unknown };
+      })
+    | undefined;
+
+  if (!currentContext?.execution?.ctx) return handler();
+
+  const hadLegacyContext = Object.prototype.hasOwnProperty.call(
+    currentContext,
+    'ctx'
+  );
+  const previousLegacyContext = currentContext.ctx;
+  currentContext.ctx = currentContext.execution.ctx;
+
+  try {
+    return await handler();
+  } finally {
+    if (hadLegacyContext) {
+      currentContext.ctx = previousLegacyContext;
+    } else {
+      delete currentContext.ctx;
+    }
+  }
 };
 
 export const codeAgentFunction = inngest.createFunction(
@@ -284,9 +312,11 @@ export const codeAgentFunction = inngest.createFunction(
         },
       });
 
-      const result = await network.run(event.data.value, {
-        state,
-      });
+      const result = await runWithAgentKitContext(() =>
+        network.run(event.data.value, {
+          state,
+        })
+      );
 
       await step.run('mark-agent-finished', async () => {
         await prisma.project.update({
@@ -316,11 +346,11 @@ export const codeAgentFunction = inngest.createFunction(
         }),
       });
 
-      const { output: fragmentTitleOutput } = await fragmentTitleGenerator.run(
-        result.state.data.summary
+      const { output: fragmentTitleOutput } = await runWithAgentKitContext(() =>
+        fragmentTitleGenerator.run(result.state.data.summary)
       );
-      const { output: responseOutput } = await responseGenerator.run(
-        result.state.data.summary
+      const { output: responseOutput } = await runWithAgentKitContext(() =>
+        responseGenerator.run(result.state.data.summary)
       );
 
       const isError =
