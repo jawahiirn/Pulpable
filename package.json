@@ -22,7 +22,7 @@
     "@e2b/code-interpreter": "^1.5.1",
     "@eslint/js": "^9.32.0",
     "@hookform/resolvers": "^5.2.1",
-    "@inngest/agent-kit": "^0.8.3",
+    "@inngest/agent-kit": "^0.11.0",
     "@prisma/client": "^6.13.0",
     "@prisma/extension-accelerate": "^2.0.2",
     "@radix-ui/react-accordion": "^1.2.11",
