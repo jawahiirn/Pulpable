@@ -5,7 +5,6 @@ import {
   createTool,
   createNetwork,
   createState,
-  type Tool,
   type Message,
 } from '@inngest/agent-kit';
 import Sandbox from '@e2b/code-interpreter';
@@ -33,6 +32,17 @@ interface AgentState {
   summary: string;
   files: { [path: string]: string };
 }
+
+type AgentToolOptions = {
+  step?: {
+    run: <T>(name: string, handler: () => Promise<T>) => Promise<T>;
+  };
+  network?: {
+    state: {
+      data: AgentState;
+    };
+  };
+};
 
 export const codeAgentFunction = inngest.createFunction(
   { id: 'code-agent' },
@@ -62,6 +72,16 @@ export const codeAgentFunction = inngest.createFunction(
         await sandbox.setTimeout(SANDBOX_TIMEOUT);
         return sandbox.sandboxId;
       });
+
+      const runAgentToolStep = async <T>(
+        options: unknown,
+        name: string,
+        handler: () => Promise<T>
+      ) => {
+        const toolOptions = options as AgentToolOptions | undefined;
+        if (toolOptions?.step) return toolOptions.step.run(name, handler);
+        return handler();
+      };
 
       await step.run('mark-sandbox-ready', async () => {
         await prisma.project.update({
@@ -122,7 +142,7 @@ export const codeAgentFunction = inngest.createFunction(
             parameters: z.object({
               command: z.string(),
             }),
-            handler: async ({ command }, { step }) => {
+            handler: async ({ command }, options) => {
               const buffers = { stdout: '', stderr: '' };
               const appendOutput = (key: 'stdout' | 'stderr', data: string) => {
                 buffers[key] = `${buffers[key]}${data}`.slice(
@@ -130,7 +150,8 @@ export const codeAgentFunction = inngest.createFunction(
                 );
               };
               try {
-                const result = await step?.run(
+                const result = await runAgentToolStep(
+                  options,
                   'Running Terminal Command',
                   async () => {
                     const sandbox = await getSandbox(sandboxId);
@@ -164,15 +185,17 @@ export const codeAgentFunction = inngest.createFunction(
                 })
               ),
             }),
-            handler: async (
-              { files },
-              { network, step }: Tool.Options<AgentState>
-            ) => {
+            handler: async ({ files }, options) => {
               try {
-                const updatedFiles = await step?.run(
+                const toolOptions = options as unknown as
+                  | AgentToolOptions
+                  | undefined;
+                const updatedFiles = await runAgentToolStep(
+                  options,
                   'Writing Files',
                   async () => {
-                    const updatedFiles = network.state.data.files || {};
+                    const updatedFiles =
+                      toolOptions?.network?.state.data.files || {};
 
                     const sandbox = await getSandbox(sandboxId);
                     for (const file of files) {
@@ -184,8 +207,8 @@ export const codeAgentFunction = inngest.createFunction(
                   }
                 );
 
-                if (updatedFiles) {
-                  network.state.data.files = updatedFiles;
+                if (updatedFiles && toolOptions?.network) {
+                  toolOptions.network.state.data.files = updatedFiles;
                 }
 
                 return 'Files created/updated successfully';
@@ -200,18 +223,23 @@ export const codeAgentFunction = inngest.createFunction(
             parameters: z.object({
               files: z.array(z.string()),
             }),
-            handler: async ({ files }, { step }) => {
+            handler: async ({ files }, options) => {
               try {
-                await step?.run('Reading Files', async () => {
-                  const sandbox = await getSandbox(sandboxId);
-                  console.log('Running readFiles');
-                  const contents = [];
-                  for (const file of files) {
-                    const content = await sandbox.files.read(file);
-                    contents.push({ path: file, content });
+                const contents = await runAgentToolStep(
+                  options,
+                  'Reading Files',
+                  async () => {
+                    const sandbox = await getSandbox(sandboxId);
+                    console.log('Running readFiles');
+                    const contents: { path: string; content: string }[] = [];
+                    for (const file of files) {
+                      const content = await sandbox.files.read(file);
+                      contents.push({ path: file, content });
+                    }
+                    return contents;
                   }
-                  return JSON.stringify(contents);
-                });
+                );
+                return JSON.stringify(contents);
               } catch (err) {
                 return 'Error: ' + err;
               }
