@@ -29,6 +29,12 @@ export const MessagesContainer = ({
       { refetchInterval: 2000 }
     )
   );
+  const { data: project } = useSuspenseQuery(
+    trpc.projects.getOne.queryOptions(
+      { id: projectId },
+      { refetchInterval: 1500 }
+    )
+  );
 
   useEffect(() => {
     const lastAssistantMessage = messages.findLast(
@@ -52,8 +58,8 @@ export const MessagesContainer = ({
     setActiveFragment(fragment);
   };
 
-  const lastMessage = messages[messages.length - 1];
-  const isLastMessageUser = lastMessage.role === 'USER';
+  const isGenerating =
+    project.status === 'QUEUED' || project.status === 'RUNNING';
 
   return (
     <div className={'flex flex-col min-h-0 flex-1'}>
@@ -71,7 +77,7 @@ export const MessagesContainer = ({
               onFragmentClick={() => onSelectFragment(message.fragment)}
             />
           ))}
-          {isLastMessageUser && <MessageLoading />}
+          {isGenerating && <MessageLoading step={project.generationStep} />}
           <div ref={bottomRef} />
         </div>
       </div>

@@ -18,6 +18,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSub,
 } from '@/components/ui/dropdown-menu';
+import { GenerationStatus } from '@/modules/projects/ui/components/generation-status';
 
 interface Props {
   projectId: string;
@@ -26,12 +27,15 @@ interface Props {
 export const ProjectHeader = ({ projectId }: Props) => {
   const trpc = useTRPC();
   const { data: project } = useSuspenseQuery(
-    trpc.projects.getOne.queryOptions({ id: projectId })
+    trpc.projects.getOne.queryOptions(
+      { id: projectId },
+      { refetchInterval: 1500 }
+    )
   );
   const { setTheme, theme } = useTheme();
 
   return (
-    <header className={'p-2 flex justify-between items-center border-b'}>
+    <header className={'p-2 flex justify-between items-center gap-3 border-b'}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -77,6 +81,7 @@ export const ProjectHeader = ({ projectId }: Props) => {
           </DropdownMenuSub>
         </DropdownMenuContent>
       </DropdownMenu>
+      <GenerationStatus project={project} />
     </header>
   );
 };
